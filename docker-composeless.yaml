@@ -1,0 +1,11 @@
+version: "2"
+services:
+  container:
+    image: morrisjobke/webdav:latest
+    ports:
+      - "8888:80"
+    environment:
+      - USERNAME=test
+      - PASSWORD=test
+  function:
+    function: testfib

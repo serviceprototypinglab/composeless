@@ -1,0 +1,4 @@
+_*.yaml
+_*.functions
+_snafu
+snafu.csv

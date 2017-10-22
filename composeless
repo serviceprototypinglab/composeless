@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+#
+# Composeless - compose hybrid container/function applications
+
+import yaml
+import sys
+import os
+import copy
+import subprocess
+import json
+import signal
+
+configfile = "docker-composeless.yaml"
+functionhub = "http://snafu-control-zhaw-test1.appuioapp.ch/"
+# web interface: http://functionhub-zhaw-test1.appuioapp.ch/
+
+def printless(*s):
+	yellow = "\033[1;33m"
+	reset = "\033[0;0m"
+	s += (reset,)
+	print(yellow, "»» Composeless:", *s)
+
+def prepare():
+	if not os.path.isdir("_snafu"):
+		printless("setting up functions environment...")
+		cp = subprocess.run("git clone https://github.com/serviceprototypinglab/snafu.git _snafu", shell=True)
+		if cp.returncode:
+			printless("error retrieving functions environment")
+			return
+
+def deploy(service, args, fdir):
+	if args:
+		printless("treat...", service, "with", args)
+		if "up" in args:
+			cmd = "aws --endpoint-url {} lambda get-function --function-name {}".format(functionhub, service)
+			cp = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
+			if not cp.returncode:
+				#print(cp)
+				s = json.loads(cp.stdout.decode("utf-8"))
+				download = s["Code"]["Location"]
+				# FIXME snafu-control might figure out route internally one day
+				download = download.replace("http://localhost:10000/", functionhub)
+				if os.path.isfile(os.path.join(fdir, os.path.basename(download))):
+					printless("- assuming cached copy")
+				else:
+					printless("- download", download)
+					os.makedirs(fdir, exist_ok=True)
+					cp = subprocess.run("wget -q {} -O {}/{}".format(download, fdir, os.path.basename(download)), shell=True)
+					if cp.returncode:
+						printless("error retrieving function implementation")
+						return
+					cp = subprocess.run("unzip -d {} {}/{}".format(fdir, fdir, os.path.basename(download)), shell=True)
+			else:
+				printless("error retrieving function information")
+				return
+		elif "down" in args:
+			printless("- operation not yet supported")
+		else:
+			printless("- no relevant operation")
+	else:
+		printless("skip functions processing")
+
+prepare()
+
+idx = None
+for i, arg in enumerate(sys.argv):
+	if arg in ("-f", "--file"):
+		idx = i + 1
+		configfile = sys.argv[idx]
+		break
+
+conf = yaml.load(open(configfile).read())
+confout = copy.deepcopy(conf)
+cpsnafu = None
+if "services" in conf:
+	services = conf["services"]
+	fdir = "_" + os.path.basename(configfile).replace(".yaml", ".functions")
+	needed = False
+	for service in services:
+		if "function" in service:
+			deploy(services[service]["function"], sys.argv[1:], fdir)
+			needed = True
+			del confout["services"][service]
+	if needed:
+		if "up" in sys.argv[1:]:
+			cmd = "./_snafu/snafu-control {}".format(fdir)
+			printless("launch functions environment...", cmd)
+			cpsnafu = subprocess.Popen(cmd, shell=True)
+			printless("launched [pid={}]".format(cpsnafu.pid))
+		elif "down" in sys.argv[1:]:
+			printless("do nothing")
+		else:
+			printless("do nothing")
+
+ediblefile = "_composeless.yaml"
+
+f = open(ediblefile, "w")
+f.write(yaml.dump(confout))
+f.close()
+
+args = sys.argv[:]
+if idx:
+	args[idx] = ediblefile
+else:
+	args = [args[0]] + ["-f", ediblefile] + args[1:]
+
+cmd = "docker-compose {}".format(" ".join(args[1:]))
+printless("invoke containers environment...", cmd)
+cpcompose = subprocess.Popen(cmd, shell=True)
+printless("launched [pid={}]".format(cpcompose.pid))
+
+if "up" in sys.argv[1:]:
+	try:
+		while True:
+			pass
+	except KeyboardInterrupt:
+		pass
+
+	print()
+	printless("interrupt!")
+
+	if cpsnafu:
+		os.kill(cpsnafu.pid, signal.SIGTERM)
+	# FIXME hacky
+	cmd = cmd.replace("up", "down")
+	os.system(cmd)
