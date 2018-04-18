@@ -77,7 +77,7 @@ if "services" in conf:
 	fdir = "_" + os.path.basename(configfile).replace(".yaml", ".functions")
 	needed = False
 	for service in services:
-		if "function" in service:
+		if "function" in services[service]:
 			deploy(services[service]["function"], sys.argv[1:], fdir)
 			needed = True
 			del confout["services"][service]
