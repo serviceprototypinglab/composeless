@@ -11,8 +11,8 @@ import json
 import signal
 
 configfile = "docker-composeless.yaml"
-functionhub = "http://snafu-control-zhaw-test1.appuioapp.ch/"
-# web interface: http://functionhub-zhaw-test1.appuioapp.ch/
+functionhub = "http://snafu-control-zhaw-prod-demos.appuioapp.ch/"
+# web interface: http://functionhub-zhaw-prod-demos.appuioapp.ch/
 
 def printless(*s):
 	yellow = "\033[1;33m"
